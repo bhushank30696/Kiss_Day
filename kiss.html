@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Kiss Avalanche 💋</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,500;1,700&family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background: #fff0f3; /* Soft Blush */
+            user-select: none;
+            touch-action: none;
+            font-family: 'Montserrat', sans-serif;
+            transition: background 1s ease;
+        }
+
+        /* --- UI LAYER --- */
+        .ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; align-items: center;
+            z-index: 10;
+            transition: opacity 0.5s;
+        }
+
+        .header {
+            margin-top: 50px;
+            text-align: center;
+            mix-blend-mode: multiply;
+        }
+
+        .title {
+            font-family: 'Playfair Display', serif;
+            font-size: 3rem; color: #6d1b1b; /* Deep Merlot */
+            font-style: italic; line-height: 0.9;
+        }
+
+        .subtitle {
+            font-size: 0.75rem; letter-spacing: 2px; 
+            text-transform: uppercase; color: #b76e79; margin-top: 10px;
+        }
+
+        .hint {
+            position: absolute; bottom: 50px;
+            font-size: 0.8rem; color: rgba(109, 27, 27, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        /* --- THE PLAYFUL MESSAGE --- */
+        .interruption-msg {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 20;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .interruption-msg.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+        .msg-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem; color: #d63031; margin-bottom: 5px;
+        }
+        .msg-sub { font-size: 0.85rem; color: #636e72; }
+
+        /* --- HIDDEN REVEAL CARD --- */
+        .reveal-card {
+            position: absolute;
+            top: -600px; left: 50%;
+            transform: translateX(-50%) rotate(-3deg);
+            width: 85%; max-width: 320px;
+            background: white;
+            padding: 15px 15px 60px 15px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.4); /* Stronger shadow */
+            z-index: 30; /* Above dimmer */
+            transition: top 1.5s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+        .reveal-card.show { top: 20%; }
+        
+        .reveal-card img { width: 100%; height: 380px; object-fit: cover; filter: sepia(10%) contrast(105%); }
+        .reveal-caption {
+            position: absolute; bottom: 20px; width: 100%; text-align: center;
+            font-family: 'Playfair Display', serif; font-style: italic; color: #555; font-size: 1.2rem;
+            left: 0;
+        }
+
+        /* --- DIMMER LAYER --- */
+        .dim-layer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); /* Darkens the background */
+            opacity: 0; pointer-events: none; z-index: 25;
+            transition: opacity 1s;
+        }
+        .dim-layer.active { opacity: 1; }
+
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+        @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+    </style>
+</head>
+<body>
+
+    <div class="ui-layer" id="ui">
+        <div class="header">
+            <div class="title">Love<br>Avalanche</div>
+            <div class="subtitle">Drag to pour</div>
+        </div>
+        <div class="hint">Fill the screen with us...</div>
+    </div>
+
+    <div class="interruption-msg" id="popup">
+        <div class="msg-title">Okay, okay! 🤍</div>
+        <div class="msg-sub">I get it... you really want<br>these kisses!</div>
+    </div>
+
+    <div class="dim-layer" id="dimmer"></div>
+
+    <div class="reveal-card" id="card">
+        <img src="kiss.png" alt="Us">
+        <div class="reveal-caption">Sending a million real ones. 💋</div>
+    </div>
+
+    <script>
+        // --- MATTER.JS SETUP ---
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              Runner = Matter.Runner,
+              Bodies = Matter.Bodies,
+              Composite = Matter.Composite,
+              Mouse = Matter.Mouse,
+              MouseConstraint = Matter.MouseConstraint,
+              Events = Matter.Events;
+
+        const engine = Engine.create();
+        const world = engine.world;
+
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        // Boundaries
+        const wallOptions = { isStatic: true, render: { visible: false } };
+        const ground = Bodies.rectangle(width/2, height + 50, width, 100, wallOptions);
+        const leftWall = Bodies.rectangle(-50, height/2, 100, height, wallOptions);
+        const rightWall = Bodies.rectangle(width + 50, height/2, 100, height, wallOptions);
+        Composite.add(world, [ground, leftWall, rightWall]);
+
+        // Mouse
+        const mouse = Mouse.create(canvas);
+        const mouseConstraint = MouseConstraint.create(engine, {
+            mouse: mouse,
+            constraint: { stiffness: 0.2, render: { visible: false } }
+        });
+        Composite.add(world, mouseConstraint);
+
+        // --- GAME LOGIC ---
+        let kissCount = 0;
+        const revealThreshold = 45; 
+        let isRevealed = false;
+        
+        // --- ASSETS ---
+        const colors = ['#e17055', '#d63031', '#fdcb6e', '#e84393', '#2d3436'];
+        const words = ["Yours", "Forever", "Love", "Muah", "Soul", "XOXO", "Us"]; // Romantic Words
+        
+        // --- SPAWN LOGIC ---
+        function spawnKiss(x, y) {
+            if(isRevealed) return; 
+
+            // Haptic Feedback (Android)
+            if(navigator.vibrate) navigator.vibrate(5);
+
+            const type = Math.random() > 0.3 ? 'pill' : 'heart';
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const word = words[Math.floor(Math.random() * words.length)];
+            
+            let body;
+            if (type === 'pill') {
+                body = Bodies.rectangle(x, y, 70, 28, { 
+                    chamfer: { radius: 14 },
+                    render: { fillStyle: color },
+                    label: 'pill',
+                    word: word,
+                    restitution: 0.5
+                });
+            } else {
+                body = Bodies.circle(x, y, 25, {
+                    render: { fillStyle: color },
+                    label: 'heart',
+                    word: "♥",
+                    restitution: 0.6
+                });
+            }
+
+            Matter.Body.setVelocity(body, { 
+                x: (Math.random() - 0.5) * 5, 
+                y: (Math.random() - 0.5) * 5 
+            });
+            Matter.Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.1);
+
+            Composite.add(world, body);
+            
+            kissCount++;
+            if(kissCount > revealThreshold) triggerSequence();
+        }
+
+        // --- REVEAL SEQUENCE ---
+        function triggerSequence() {
+            isRevealed = true;
+
+            // 1. Show Message
+            const popup = document.getElementById('popup');
+            popup.classList.add('show');
+            document.getElementById('ui').style.opacity = '0';
+
+            setTimeout(() => {
+                popup.classList.remove('show');
+                
+                // 2. Cinematic Dimmer
+                document.getElementById('dimmer').classList.add('active');
+
+                // 3. Reverse Gravity (Float away)
+                engine.gravity.y = -0.5;
+                
+                // 4. Drop Card
+                setTimeout(() => {
+                    document.getElementById('card').classList.add('show');
+                }, 800);
+
+            }, 2200);
+        }
+
+        // --- RENDERING LOOP ---
+        (function renderLoop() {
+            window.requestAnimationFrame(renderLoop);
+            Engine.update(engine, 1000 / 60);
+            ctx.clearRect(0, 0, width, height);
+
+            const bodies = Composite.allBodies(world);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            bodies.forEach(body => {
+                if (body.isStatic) return;
+
+                const pos = body.position;
+                const angle = body.angle;
+                
+                ctx.save();
+                ctx.translate(pos.x, pos.y);
+                ctx.rotate(angle);
+
+                ctx.fillStyle = body.render.fillStyle;
+                ctx.shadowColor = "rgba(0,0,0,0.1)";
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetY = 2;
+
+                if (body.label === 'pill') {
+                    ctx.beginPath();
+                    ctx.roundRect(-35, -14, 70, 28, 14);
+                    ctx.fill();
+                    ctx.shadowColor = "transparent";
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 11px Montserrat";
+                    ctx.fillText(body.word, 0, 1); // Draw the romantic word
+                } else if (body.label === 'heart') {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 25, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.shadowColor = "transparent";
+                    ctx.fillStyle = "white";
+                    ctx.font = "20px Arial";
+                    ctx.fillText("♥", 0, 2);
+                }
+                ctx.restore();
+            });
+        })();
+
+        // --- EVENTS ---
+        let isDragging = false;
+        document.addEventListener('mousedown', (e) => { isDragging = true; spawnKiss(e.clientX, e.clientY); });
+        document.addEventListener('touchstart', (e) => { isDragging = true; spawnKiss(e.touches[0].clientX, e.touches[0].clientY); }, {passive: false});
+
+        document.addEventListener('mouseup', () => isDragging = false);
+        document.addEventListener('touchend', () => isDragging = false);
+
+        document.addEventListener('mousemove', (e) => {
+            if(isDragging && Math.random() > 0.6) spawnKiss(e.clientX, e.clientY);
+        });
+        document.addEventListener('touchmove', (e) => {
+            if(isDragging && Math.random() > 0.6) spawnKiss(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+
+        window.addEventListener('resize', () => {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            Matter.Body.setPosition(ground, { x: width/2, y: height + 50 });
+            Matter.Body.setPosition(rightWall, { x: width + 50, y: height/2 });
+        });
+
+        Runner.run(engine);
+    </script>
+</body>
+</html>
